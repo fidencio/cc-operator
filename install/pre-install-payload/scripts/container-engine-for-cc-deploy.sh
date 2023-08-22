@@ -15,9 +15,21 @@ function host_systemctl() {
 }
 
 function get_container_engine() {
-	local container_engine=$(kubectl get node "$NODE_NAME" -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | awk -F '[:]' '{print $1}')
-	if [ "${container_engine}" != "containerd" ]; then
-		die "${container_engine} is not yet supported"
+	local containerRuntimeVersion=$(kubectl get node "$NODE_NAME" -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}')
+	local container_engine=$(echo "${containerRuntimeVersion}" | awk -F '[:]' '{print $1}')
+	local container_engine_version=$(echo "${containerRuntimeVersion}" | awk -F '[:]' '{print $2}')
+
+	if [[ "${container_engine_version}" ~= "1.7" ]]; then
+		# containerd will not be replaced as the minimum
+		# version installed in the node is good enough
+		# for CoCo.
+		INSTALL_CONTAINERD="false"
+	fi
+
+	if [ "${INSTALL_CONTAINERD}" = "true" ]; then
+		if [ "${container_engine}" != "containerd" ]; then
+			die "${container_engine} is not yet supported"
+		fi
 	fi
 
 	echo "$container_engine"	
@@ -29,7 +41,7 @@ function set_container_engine() {
 	container_engine=$(get_container_engine)
 }
 
-function install_artifacts() {
+function install_containerd_artifacts() {
 	echo "Copying containerd-for-cc artifacts onto host"
 
 	local artifacts_dir="/opt/confidential-containers-pre-install-artifacts"
@@ -38,7 +50,7 @@ function install_artifacts() {
 	install -D -m 644 ${artifacts_dir}/etc/systemd/system/containerd.service.d/containerd-for-cc-override.conf /etc/systemd/system/containerd.service.d/containerd-for-cc-override.conf
 }
 
-function uninstall_artifacts() {
+function uninstall_containerd_artifacts() {
 	echo "Removing containerd-for-cc artifacts from host"
 
 	echo "Removing the systemd drop-in file"
@@ -79,6 +91,8 @@ function print_help() {
 }
 
 function main() {
+	echo "INSTALL_CONTAINERD: ${INSTALL_CONTAINERD}"
+
 	# script requires that user is root
 	local euid=$(id -u)
 	if [ ${euid} -ne 0 ]; then
@@ -94,7 +108,9 @@ function main() {
 
 	case "${action}" in
 	install)
-		install_artifacts
+		if [ "${INSTALL_CONTAINERD}" = "true" ]; then
+			install_containerd_artifacts
+		fi
 		restart_systemd_service
 		;;
 	uninstall)
@@ -105,7 +121,9 @@ function main() {
 		if [ "$(uname -m)" = "s390x" ]; then
 			label_node "${action}"
 		fi
-		uninstall_artifacts
+		if [ "${INSTALL_CONTAINERD}" = "true" ]; then
+			uninstall_containerd_artifacts
+		fi
 		;;
 	*)
 		print_help
