@@ -54,6 +54,35 @@ RUN \
 	tar xvzpf containerd-${VFIO_GPU_CONTAINERD_VERSION}-linux-${ARCH}.tar.gz -C ${NODE_DESTINATION} && \
 	rm containerd-${VFIO_GPU_CONTAINERD_VERSION}-linux-${ARCH}.tar.gz
 
+#### Nydus snapshotter & nydus image
+
+FROM golang:1.19-alpine AS nydus-binary-downloader
+
+ARG ARCH
+ARG NYDUS_SNAPSHOTTER_VERSION
+ARG NYDUS_SNAPSHOTTER_REPO
+ARG NYDUS_REPO
+ARG NYDUS_VERSION
+
+ARG DESTINATION=/opt/confidential-containers-pre-install-artifacts
+ARG NODE_DESTINATION=${DESTINATION}/opt/confidential-containers
+
+RUN mkdir -p ${NODE_DESTINATION}/bin && \
+    apk add --no-cache ca-certificates build-base git curl && \
+    git clone ${NYDUS_SNAPSHOTTER_REPO} -b ${NYDUS_SNAPSHOTTER_VERSION} /nydus-snapshotter && \
+    make -C /nydus-snapshotter && \
+    chmod +x /nydus-snapshotter/bin/containerd-nydus-grpc && \
+    mv /nydus-snapshotter/bin/containerd-nydus-grpc ${NODE_DESTINATION}/bin && \
+    rm -rf /nydus-snapshotter && \
+    # FIXME: THIS IS x86_64 SPECIFIC, AND SHOULD BE FIXED BEFORE GETTING MERGED, \
+    # AS IT BREAKS s390x BUILD \
+    curl -fOL --progress-bar ${NYDUS_REPO}/releases/download/${NYDUS_VERSION}/nydus-static-${NYDUS_VERSION}-linux-${ARCH}.tgz && \
+    tar xvzpf nydus-static-${NYDUS_VERSION}-linux-${ARCH}.tgz -C / && \
+    chmod +x /nydus-static/nydus-image && \
+    mv /nydus-static/nydus-image ${NODE_DESTINATION}/bin && \
+    rm -rf /nydus-static && \
+    rm -f nydus-static-${NYDUS_VERSION}-linux-${ARCH}.tgz && \
+    apk del build-base git curl
 
 #### kubectl
 
@@ -78,12 +107,18 @@ ARG NODE_DESTINATION=${DESTINATION}/opt/confidential-containers
 ARG NODE_CONTAINERD_SYSTEMD_DESTINATION=${DESTINATION}/etc/systemd/system/containerd.service.d/
 
 ARG CONTAINERD_SYSTEMD_ARTIFACTS=./containerd/containerd-for-cc-override.conf
+ARG NYDUS_SNAPSHOTTER_ARTIFACTS=./remote-snapshotter/nydus-snapshotter/config.toml
 
 COPY --from=coco-containerd-binary-downloader ${NODE_DESTINATION}/bin/containerd ${NODE_DESTINATION}/bin/coco-containerd
 COPY --from=official-containerd-binary-downloader ${NODE_DESTINATION}/bin/containerd ${NODE_DESTINATION}/bin/official-containerd
 COPY --from=vfio-gpu-containerd-binary-downloader ${NODE_DESTINATION}/bin/containerd ${NODE_DESTINATION}/bin/vfio-gpu-containerd
+COPY --from=nydus-binary-downloader ${NODE_DESTINATION}/bin/containerd-nydus-grpc ${NODE_DESTINATION}/bin/containerd-nydus-grpc
+COPY --from=nydus-binary-downloader ${NODE_DESTINATION}/bin/nydus-image ${NODE_DESTINATION}/bin/nydus-image
 COPY --from=kubectl-binary-downloader /usr/bin/kubectl /usr/bin/kubectl
 COPY ${CONTAINERD_SYSTEMD_ARTIFACTS} ${NODE_CONTAINERD_SYSTEMD_DESTINATION}
+COPY ${NYDUS_SNAPSHOTTER_ARTIFACTS} ${NODE_DESTINATION}/share/nydus-snapshotter
 
 ARG CONTAINER_ENGINE_ARTIFACTS=./scripts
 COPY ${CONTAINER_ENGINE_ARTIFACTS}/* ${DESTINATION}/scripts/
+
+

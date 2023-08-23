@@ -1,0 +1,48 @@
+version = 1
+# Snapshotter's own home directory where it stores and creates necessary resources
+root = "/var/lib/containerd-nydus"
+# The snapshotter's GRPC server socket, containerd will connect to plugin on this socket
+address = "/run/containerd-nydus/containerd-nydus-grpc.sock"
+daemon_mode = "none"
+# Whether snapshotter should try to clean up resources when it is closed
+cleanup_on_close = false
+
+[daemon]
+nydusimage_path = "/opt/confidential-containers/bin/nydus-image"
+
+[log]
+# Print logs to stdout rather than logging files
+log_to_stdout = true
+# Snapshotter's log level
+level = "debug"
+
+[snapshot]
+# Let containerd use nydus-overlayfs mount helper
+enable_nydus_overlayfs = true
+# Whether to remove resources when a snapshot is removed
+sync_remove = false
+
+# The configuraions for features that are not production ready
+[experimental]
+# Whether to enable stargz support
+enable_stargz = false
+# Whether to enable referrers support
+# The option enables trying to fetch the Nydus image associated with the OCI image and run it.
+# Also see https://github.com/opencontainers/distribution-spec/blob/main/spec.md#listing-referrers
+enable_referrer_detect = false
+[experimental.tarfs]
+# Whether to enable nydus tarfs mode
+enable_tarfs = true
+# Only enable nydus tarfs mode for images with `tarfs hint` label when true
+tarfs_hint = false
+# Maximum of concurrence to converting OCIv1 images to tarfs, 0 means default
+max_concurrent_proc = 0
+# Mode to export tarfs images: 
+# - "none"/""
+# - "layer_verity_only"
+# - "image_verity_only"
+# - "layer_block"
+# - "image_block"
+# - "layer_block_with_verity"
+# - "image_block_with_verity"
+export_mode = ""
