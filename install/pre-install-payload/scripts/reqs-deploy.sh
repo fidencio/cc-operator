@@ -62,6 +62,9 @@ function install_nydus_snapshotter_artefacts() {
 	ln -s /opt/confidential-containers/bin/nydus-overlayfs /usr/bin/nydus-overlayfs
 	install -D -m 644 ${artifacts_dir}/opt/confidential-containers/share/nydus-snapshotter/config-coco-guest-pulling.toml /opt/confidential-containers/share/nydus-snapshotter/config-coco-guest-pulling.toml
 
+	echo "Start the nydus snapshotter"
+	nohup /opt/confidential-containers/bin/containerd-nydus-grpc --config "/opt/confidential-containers/share/nydus-snapshotter/config-coco-guest-pulling.toml" >/dev/stdout 2>&1 &
+
 	configure_nydus_snapshotter_for_containerd
 
 	restart_systemd_service
