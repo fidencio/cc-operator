@@ -10,7 +10,8 @@ images:
 - name: quay.io/confidential-containers/reqs-payload
   newTag: 7b06283a5be08f4d83f2bf15851d55739bf27ec5
 - name: quay.io/kata-containers/kata-deploy
-  newTag: 3.11.0
+  newName: quay.io/fidencio/kata-deploy
+  newTag: 3.11.0-containerd-2.0
 
 patches:
 - patch: |-
